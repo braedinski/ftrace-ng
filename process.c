@@ -193,7 +193,7 @@ bool process_run(struct process_s *process)
 					putchar('\t');
 				}
 
-				printf("+ %s%s()%s\n",
+				printf("%s+ %s()%s\n",
 					KGRN,
 					symbol.name,
 					KNRM
@@ -206,7 +206,7 @@ bool process_run(struct process_s *process)
 			case X86_32_RET: {
 				struct callret_s *ret = stack_pop(&process->stack);
 				if (!ret) {
-					return false;
+					return true;
 				}
 
 				if (elf_symbol_by_value(
@@ -261,8 +261,6 @@ bool process_get_address_space(struct process_s *process)
 
 	// Read a line at a time, 256 bytes max
 	while (fgets(line, sizeof(line), fd)) {
-		puts(line);
-
 		char *offset;
 		char *ptr = line;
 
