@@ -71,7 +71,7 @@ int get_process_address_space(struct process_s *process)
 		lc++;
 	}
 
-	return 1;
+	return 0;
 }
 
 /*
@@ -85,7 +85,7 @@ bool get_opcodes_at_pc(struct process_s *process, uint8_t *opcode, size_t length
 		process->registers.rip,
 		NULL);
 
-	opcode[0] = inst & 0xff;
+	opcode[0] = (inst & 0xff);
 	opcode[1] = (inst & 0xff00) >> 8;
 	opcode[2] = (inst & 0xff0000) >> 16;
 	opcode[3] = (inst & 0xff000000) >> 24;
@@ -159,10 +159,13 @@ int main(int argc, char **argv, char **envp)
 
 			wait(&status);
 
-			get_process_address_space(&tracee);
+			if (get_process_address_space(&tracee) == -1) {
+                fprintf(stderr, "Could not parse procmap for %d\n", tracee.pid);
+                exit(EXIT_FAILURE);
+            }
 
-			while (1)
-			{
+			while (1) {
+                
 				/* We choose to process one instruction at a time */
 				ptrace(PTRACE_SINGLESTEP, tracee.pid, NULL, NULL);
 
@@ -197,16 +200,7 @@ int main(int argc, char **argv, char **envp)
 					{
 						case X86_32_CALL:
 						{
-							printf("%s%s%s() [%p] %s%02x%s\n",
-								KBLU,
-								symbol.name,
-								KNRM,
-								tracee.registers.rip,
-								KGRN,
-								opcode[0],
-								KNRM
-							);
-
+                            /* It's 'hard-coded' at the moment, need to fix get_opcode_at_ip() */
                             unsigned long branch_address = 
                                 (opcode[1] + (opcode[2] << 8) + (0xff << 16) + (0xff << 24));
 
@@ -215,28 +209,56 @@ int main(int argc, char **argv, char **envp)
 								.return_address = tracee.registers.rip + 0x5
 							};
 
-							stack_push(&tracee.stack, &call);
+                            // printf("%p -> %p\n", call.address, call.return_address);
+
+                            if (elf_symbol_by_value(
+                                    &tracee.elf.object,
+                                    call.address,
+                                    &symbol) == false)
+                            {
+                                continue;
+                            }
+
+                            for (int i = 0; i < tracee.stack.depth; ++i)
+                                putchar('\t');
+
+                            printf("+ %s%s()%s\n",
+                                KGRN,
+                                symbol.name,
+                                KNRM
+                            );
+
+                            stack_push(&tracee.stack, &call);
 
 							break;
 						}
 						case X86_32_RET:
 						{
-							printf("%s%s%s() [%p] -> %s%02x%s\n",
-								KBLU,
-								symbol.name,
-								KNRM,
-								tracee.registers.rip,
-								KRED,
-								opcode[0],
-								KNRM
-							);
-
-							struct callret_s *ret = stack_pop(&tracee.stack);
+                            struct callret_s *ret = stack_pop(&tracee.stack);
                             if (ret)
                             {
-
+                                if (elf_symbol_by_value(
+                                        &tracee.elf.object,
+                                        ret->address,
+                                        &symbol) == false)
+                                {
+                                    continue;
+                                }
                             }
-                            
+
+                            for (int i = 0; i < tracee.stack.depth; ++i)
+                                putchar('\t');
+
+							printf("%s- %s()%s -> (%s%d%s)\n",
+								KRED,
+								symbol.name,
+                                KNRM,
+								KMAG,
+                                tracee.registers.rax,
+                                KNRM
+							);
+
+
 							break;
 						}
 					}

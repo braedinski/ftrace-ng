@@ -71,7 +71,7 @@ struct callret_s *stack_top(struct stack_s *stack)
 int main(int argc, char **argv)
 {
 	struct stack_s stack = {
-		.depth = -1
+		.depth = 0
 	};
 
 	stack_pop(&stack);
