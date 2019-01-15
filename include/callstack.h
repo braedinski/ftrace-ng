@@ -1,5 +1,10 @@
 /*
  * callstack.h
+  *
+ * @braedinski (Braeden Lynden),
+ * @AdamKinnell (Adam Kinnell),
+ * @elfmaster (Ryan O'Neill) is the creator of 'ftrace'.
+ *
 */
 
 #ifndef _CALLSTACK_H_
@@ -40,4 +45,4 @@ bool stack_push(struct stack_s *stack, struct callret_s *callret);
 struct callret_s *stack_pop(struct stack_s *stack);
 struct callret_s *stack_top(struct stack_s *stack);
 
-#endif /* _CALLSTACK_H_ */
+#endif // _CALLSTACK_H_
