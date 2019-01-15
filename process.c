@@ -44,68 +44,68 @@ bool process_exec(char *path, char **argv)
 {
 	struct process_s process;
 	memset(&process, 0, sizeof(struct process_s));
-
 	process.path = path;
+	process.attached = false;
 
 	char *name = strrchr(path, '/');
 	process.name = (name ? name + 1 : path);
-	process.attached = false;
-
-	// If we can't parse the ELF object, we're screwed!
+	
+	// Load symbol information
 	if (elf_open_object(
 		process.path,
 		&process.elf.object,
 		ELF_LOAD_F_STRICT,
 		&process.elf.error) == false)
 	{
+		// If we can't parse the ELF object, we're screwed!
 		fprintf(stderr,
 			"The ELF header for '%s' could not be parsed.\n",
 			process.path
 		);
-
 		return false;
 	}
 
 	process.pid = fork();
 	switch (process.pid) {
+		case -1: {
+			// ERROR: Unable to fork
+			perror("fork");
+			exit(1);
+		}
 		case 0: {
+			// CHILD: Start the process to be traced.
 			if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1) {
 				perror("ptrace");
 				exit(1);
 			}
-
 			ptrace(PTRACE_SETOPTIONS, 0, 0, PTRACE_O_TRACEEXIT);
 
+			// Start child process
 			if (execve(process.path, argv, NULL) == -1) {
 				perror("execve");
 				exit(1);
 			}
-
-			break;
-		}
-		case -1: {
-			perror("fork");
-			exit(1);
 		}
 		default: {
+			// PARENT: Begin tracing the child process.
 			int status;
 			wait(&status);
 
+			// Get segment information
 			if (!process_get_address_space(&process)) {
 				fprintf(stderr,
 					"Could not parse /proc/%d/maps, exiting...\n",
 					process.pid
 				);
-
 				exit(1);
 			}
 
-			while (process_run(&process)) {
-
-			}
+			// Trace child until exit
+			while (process_run(&process));
 		}
 	}
 
+	// Cleanup
 	elf_close_object(&process.elf.object);
 	
 	return true;
