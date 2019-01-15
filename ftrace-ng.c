@@ -197,7 +197,7 @@ int main(int argc, char **argv, char **envp)
 					{
 						case X86_32_CALL:
 						{
-							printf("%s%s%s() [%p] -> %s%02x%s\n",
+							printf("%s%s%s() [%p] %s%02x%s\n",
 								KBLU,
 								symbol.name,
 								KNRM,
@@ -207,25 +207,13 @@ int main(int argc, char **argv, char **envp)
 								KNRM
 							);
 
-							/* The processor then branches to the address in the current code segment specified
-							 * with the target operand. The target operand specifies either an absolute offset
-							 * in the code segment (that is an offset from the base of the code segment) or a
-							 * relative offset (a signed displacement relative to the current value of the
-							 * instruction pointer in the EIP register, which points to the instruction
-							 * following the CALL instruction).
-							*/
-
-							/* So to get the address of the function from the 0xE8 instruction,
-							 * we need to the instruction pointer + [shift out all of the bytes 0xE8 (1) (2) (3) (4)]
-							 * then add 5 bytes to take care of the current instruction length */
+                            unsigned long branch_address = 
+                                (opcode[1] + (opcode[2] << 8) + (0xff << 16) + (0xff << 24));
 
 							struct callret_s call = {
-								.address = tracee.registers.rip + (opcode[1] >> 8),
+								.address = tracee.registers.rip + branch_address + 0x5,
 								.return_address = tracee.registers.rip + 0x5
 							};
-
-							/* Testing */
-							printf("CALL %p -> RET: %p\n", call.address, call.return_address);
 
 							stack_push(&tracee.stack, &call);
 
@@ -244,7 +232,11 @@ int main(int argc, char **argv, char **envp)
 							);
 
 							struct callret_s *ret = stack_pop(&tracee.stack);
+                            if (ret)
+                            {
 
+                            }
+                            
 							break;
 						}
 					}
