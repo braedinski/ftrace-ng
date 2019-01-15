@@ -19,14 +19,14 @@ int main(int argc, char **argv, char **envp)
 {
 	puts("ftrace-ng");
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s <filename> <args>... \n", argv[0]);
 		options();
 		return EXIT_FAILURE;
 	}
 
 	char *path = argv[1];
-	if (!process_exec(path)) {
+	if (!process_exec(path, &argv[1])) {
 		fprintf(stderr, "The file '%s' could not be loaded, exiting...\n", argv[1]);
 		return EXIT_FAILURE;
 	}

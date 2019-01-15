@@ -19,7 +19,7 @@ bool stack_push(struct stack_s *stack, struct callret_s *callret)
 	struct callret_s *new = calloc(1, sizeof(struct callret_s));
 	if (new)
 	{
-		memcpy(new, callret, sizeof(callret));
+		memcpy(new, callret, sizeof(*callret));
 		new->next = stack->top;
 
 		stack->top = new;
@@ -56,6 +56,8 @@ struct callret_s *stack_pop(struct stack_s *stack)
 
 		return callret;
 	}
+	
+	return NULL;
 }
 
 
