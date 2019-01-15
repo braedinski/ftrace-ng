@@ -86,6 +86,7 @@ bool process_exec(char *path, char **argv)
 				exit(1);
 			}
 		}
+
 		default: {
 			// PARENT: Begin tracing the child process.
 			int status;
