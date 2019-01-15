@@ -13,6 +13,7 @@ all: $(wildcard src/*.c)
 	$(wildcard src/*.c) \
 	-o bin/ftrace-ng \
 	-lelfmaster
+	cp bin/ftrace-ng ./ftrace-ng
 	
 clean:
 	rm -f ftrace-ng callstack

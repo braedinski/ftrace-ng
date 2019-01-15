@@ -23,6 +23,8 @@
 
 #include "callstack.h"
 #include "process.h"
+#include "i386.h"
+#include "x64.h"
 
 #define PARSER_PERMISSIONS_LENGTH 4 // rwxp
 

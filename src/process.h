@@ -65,6 +65,15 @@ struct process_s
 };
 
 
+/*
+ * arch_funcs_s
+*/
+struct arch_funcs_s
+{
+	bool (*run)(struct process_s *);
+};
+
+
 // These are for loading and attaching to executables, called from main()
 bool process_exec(char *path, char **argv);
 bool process_attach(const pid_t pid);

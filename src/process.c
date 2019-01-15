@@ -9,39 +9,18 @@
 
 #include "ftrace-ng.h"
 
-bool process_run(struct process_s *process);
+bool process_run(struct process_s *process, struct arch_funcs_s *arch_funcs);
 bool process_get_address_space(struct process_s *process);
-
-/*
- * process_get_instructions
-*/
-bool process_get_instructions(
-	struct process_s *process,
-	uint8_t *opcode,
-	size_t length)
-{
-	long inst = ptrace(
-		PTRACE_PEEKTEXT,
-		process->pid,
-		process->registers.rip,
-		NULL
-	);
-
-	opcode[0] = (inst & 0xff);
-	opcode[1] = (inst & 0xff00) >> 8;
-	opcode[2] = (inst & 0xff0000) >> 16;
-	opcode[3] = (inst & 0xff000000) >> 24;
-
-	return true;
-}
 
 /*
  * process_exec()
  * The function loads the binary at 'path' and then fork's and execve's it.
- *
 */
 bool process_exec(char *path, char **argv)
 {
+	struct arch_funcs_s arch_funcs;
+	memset(&arch_funcs, 0, sizeof(struct arch_funcs_s));
+
 	struct process_s process;
 	memset(&process, 0, sizeof(struct process_s));
 	process.path = path;
@@ -67,11 +46,11 @@ bool process_exec(char *path, char **argv)
 
 	switch (process.elf.object.arch) {
 		case i386: {
-			puts("i386");
+			arch_funcs.run = &i386_run;
 			break;
 		}
 		case x64: {
-			puts("x64");
+			arch_funcs.run = &x64_run;
 			break;
 		}
 		default: {
@@ -116,7 +95,7 @@ bool process_exec(char *path, char **argv)
 			}
 
 			// Trace child until exit
-			while (process_run(&process));
+			while (process_run(&process, &arch_funcs));
 		}
 	}
 
@@ -127,6 +106,7 @@ bool process_exec(char *path, char **argv)
 }
 
 /*
+ * process_attach
  *
 */
 bool process_attach(const pid_t pid)
@@ -141,115 +121,32 @@ bool process_attach(const pid_t pid)
 }
 
 /*
+ * process_run
  *
 */
-bool process_run(struct process_s *process)
+bool process_run(struct process_s *process, struct arch_funcs_s *arch_funcs)
 {
-	uint8_t opcode[8];
-
-	int status;
-
+	// To be replaced with PTRACE_CONT eventually, and breakpoints.
 	ptrace(PTRACE_SINGLESTEP, process->pid, NULL, NULL);
 
+	int status;
 	wait(&status);
 	if (WIFEXITED(status))
 	{
 		return false;
 	}
 
-	// The current state of all x86 registers
+	// The current state of all x86 registers.
 	ptrace(PTRACE_GETREGS, process->pid, NULL, &process->registers);
 
-	// by dereferencing the PC we can obtain the instructions
-	process_get_instructions(process, opcode, 8);
-
-	// We only care about the PC inside of our .text section
-	if (process->registers.rip >= process->as.start && 
-		process->registers.rip <= process->as.end) {
-
-		// If we can't locate the symbol, GTFO
-		struct elf_symbol symbol;
-		if (elf_symbol_by_value(
-			&process->elf.object,
-			process->registers.rip,
-			&symbol) == false)
-		{
-			/* 
-			* The semantics of this return statement are RIDICULOUS.
-			* I think we should probably use an enum of error codes or something
-			*/
-			return true;
-		}
-
-		// For tracing CALL and RET instructions
-		switch (opcode[0]) {
-			case X86_32_CALL: {
-				// It's 'hard-coded' at the moment, need to fix get_opcode_at_ip()
-				unsigned long branch_address = 
-				(opcode[1] + (opcode[2] << 8) + (0xff << 16) + (0xff << 24));
-
-				struct callret_s call = {
-					.address = process->registers.rip + branch_address + 0x5,
-					.return_address = process->registers.rip + 0x5
-				};
-
-				// printf("%p -> %p\n", call.address, call.return_address);
-
-				if (elf_symbol_by_value(
-					&process->elf.object,
-					call.address,
-					&symbol) == false)
-				{
-					return true;
-				}
-
-				for (int i = 0; i < process->stack.depth; ++i) {
-					putchar('\t');
-				}
-
-				printf("%s+ %s()%s\n",
-					KGRN,
-					symbol.name,
-					KNRM
-				);
-
-				stack_push(&process->stack, &call);
-
-				break;
-			}
-			case X86_32_RET: {
-				struct callret_s *ret = stack_pop(&process->stack);
-				if (!ret) {
-					return true;
-				}
-
-				if (elf_symbol_by_value(
-					&process->elf.object,
-					ret->address,
-					&symbol) == false)
-				{
-					return true;
-				}
-
-				for (int i = 0; i < process->stack.depth; ++i) {
-					putchar('\t');
-				}
-
-				printf("%s- %s()%s -> (%s%lld%s)\n",
-					KYEL,
-					symbol.name,
-					KNRM,
-					KMAG,
-					process->registers.rax,
-					KNRM
-				);
-
-				break;
-			}
-		}
+	// We only care about the PC inside of our .text section.
+	if (process->registers.rip < process->as.start ||
+		process->registers.rip > process->as.end)
+	{
+		return true;
 	}
 
-	return true;
+	return arch_funcs->run(process);
 }
 
 /*
