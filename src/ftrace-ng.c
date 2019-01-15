@@ -7,7 +7,7 @@
  *
 */
 
-#include "include/ftrace-ng.h"
+#include "ftrace-ng.h"
 
 void options();
 

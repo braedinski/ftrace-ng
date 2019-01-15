@@ -7,7 +7,7 @@
  *
 */
 
-#include "include/ftrace-ng.h"
+#include "ftrace-ng.h"
 
 bool process_run(struct process_s *process);
 bool process_get_address_space(struct process_s *process);
