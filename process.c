@@ -133,7 +133,6 @@ bool process_run(struct process_s *process)
 	uint8_t opcode[8];
 
 	int status;
-	long instruction;
 
 	ptrace(PTRACE_SINGLESTEP, process->pid, NULL, NULL);
 
@@ -221,7 +220,7 @@ bool process_run(struct process_s *process)
 					putchar('\t');
 				}
 
-				printf("%s- %s()%s -> (%s%d%s)\n",
+				printf("%s- %s()%s -> (%s%lld%s)\n",
 					KYEL,
 					symbol.name,
 					KNRM,
@@ -262,7 +261,6 @@ bool process_get_address_space(struct process_s *process)
 	// Read a line at a time, 256 bytes max
 	while (fgets(line, sizeof(line), fd)) {
 		char *offset;
-		char *ptr = line;
 
 		// To extract the first two virtual addresses, separated by '-'
 		unsigned long start = strtoul(line, &offset, 16);
