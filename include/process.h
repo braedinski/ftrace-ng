@@ -16,11 +16,11 @@
 */
 struct address_space_s
 {
-    unsigned long   start;
-    unsigned long   end;
-    unsigned int    size;
+	unsigned long   start;
+	unsigned long   end;
+	unsigned int    size;
 
-    const char      *path; // requires a call to free()
+	const char      *path; // requires a call to free()
 };
 
 
@@ -30,8 +30,8 @@ struct address_space_s
 */
 struct elf_s
 {
-    elfobj_t object;
-    elf_error_t error;
+	elfobj_t object;
+	elf_error_t error;
 };
 
 
@@ -41,27 +41,27 @@ struct elf_s
 */
 struct process_s
 {
-    pid_t                   pid;
+	pid_t                   pid;
 
-    struct address_space_s  as;
+	struct address_space_s  as;
 
-    // We store a handle to the ELF object for libelfmaster
-    struct elf_s            elf;
+	// We store a handle to the ELF object for libelfmaster
+	struct elf_s            elf;
 
-    // CPU registers updated each instruction
-    struct user_regs_struct registers;
+	// CPU registers updated each instruction
+	struct user_regs_struct registers;
 
-    // The callstack for this process
-    struct stack_s          stack;
+	// The callstack for this process
+	struct stack_s          stack;
 
-    // The absolute pathname to the executable
-    char                    *path;
+	// The absolute pathname to the executable
+	char                    *path;
 
-    // If we loaded the program, this is the filename argument passed from the CLI
-    char                    *name;
+	// If we loaded the program, this is the filename argument passed from the CLI
+	char                    *name;
 
-    // Whether or not we attached or execve()'d
-    bool                    attached;
+	// Whether or not we attached or execve()'d
+	bool                    attached;
 };
 
 

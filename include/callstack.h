@@ -1,6 +1,6 @@
 /*
  * callstack.h
-  *
+ *
  * @braedinski (Braeden Lynden),
  * @AdamKinnell (Adam Kinnell),
  * @elfmaster (Ryan O'Neill) is the creator of 'ftrace'.
@@ -20,7 +20,7 @@
 */
 struct callret_s
 {
-    unsigned long address;
+	unsigned long address;
 	unsigned long return_address;
 
 	struct callret_s *next;

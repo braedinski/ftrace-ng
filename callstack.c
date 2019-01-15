@@ -41,11 +41,11 @@ struct callret_s *stack_pop(struct stack_s *stack)
 
 	if (stack->top)
 	{
-		/*
-		 * We need to free() this but who is responsible?!
-		 * I think maybe a 2nd parameter should reference a stack variable,
-		 * then we memcpy() into it.
-		*/
+			/*
+			 * We need to free() this but who is responsible?!
+			 * I think maybe a 2nd parameter should reference a stack variable,
+			 * then we memcpy() into it.
+			*/
 
 		struct callret_s *callret = stack->top;
 		if (callret)
