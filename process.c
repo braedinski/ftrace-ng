@@ -65,6 +65,20 @@ bool process_exec(char *path, char **argv)
 		return false;
 	}
 
+	switch (process.elf.object.arch) {
+		case i386: {
+			puts("i386");
+			break;
+		}
+		case x64: {
+			puts("x64");
+			break;
+		}
+		default: {
+			puts("Unsupported ABI");
+		}
+	}
+
 	process.pid = fork();
 	switch (process.pid) {
 		case -1: {

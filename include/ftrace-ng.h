@@ -29,6 +29,9 @@
 #define X86_32_CALL	0xE8
 #define X86_32_RET	0xC3
 
+#define VERSION_MAJOR 1
+#define VERSION_MINOR 0
+
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"
