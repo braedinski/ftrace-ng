@@ -40,7 +40,7 @@ bool process_get_instructions(
  * The function loads the binary at 'path' and then fork's and execve's it.
  *
 */
-bool process_exec(char *path)
+bool process_exec(char *path, char **argv)
 {
 	struct process_s process;
 	memset(&process, 0, sizeof(struct process_s));
@@ -76,7 +76,7 @@ bool process_exec(char *path)
 
 			ptrace(PTRACE_SETOPTIONS, 0, 0, PTRACE_O_TRACEEXIT);
 
-			if (execve(process.path, NULL, NULL) == -1) {
+			if (execve(process.path, argv, NULL) == -1) {
 				perror("execve");
 				exit(1);
 			}
