@@ -12,19 +12,29 @@
 /*
  * i386_set_breakpoint
 */
-bool i386_set_breakpoint(struct process_s *process, long address)
+bool i386_set_breakpoint(
+	struct process_s *process,
+	struct breakpoint_s *breakpoint)
 {
-	long instruction = ptrace(PTRACE_PEEKTEXT, process->pid, address, NULL);
-	long bp_instruction = (instruction & ~0xff) | I386_INT3; // 0xCC
+	if (!breakpoint) {
+		return false;
+	}
 
-	struct breakpoint_s breakpoint = {
-		.address = address,
-		.previous_instruction = instruction
-	};
+	// We need to record the instruction that was at this address.
+	breakpoint->previous_instruction = ptrace(
+		PTRACE_PEEKTEXT,
+		process->pid,
+		breakpoint->address,
+		NULL
+	);
 
-	breakpoint_push_back(&process->breakpoints, &breakpoint);
-
-	ptrace(PTRACE_POKETEXT, process->pid, address, bp_instruction);
+	// This POKETEXT call sets the first byte of the instruction to 'INT 3'.
+	ptrace(
+		PTRACE_POKETEXT,
+		process->pid,
+		breakpoint->address,
+		(breakpoint->previous_instruction & ~0xff) | I386_INT3
+	);
 
 	return true;
 }
@@ -33,29 +43,27 @@ bool i386_set_breakpoint(struct process_s *process, long address)
 /*
  * i386_unset_breakpoint
 */
-bool i386_unset_breakpoint(struct process_s *process, long address)
+bool i386_unset_breakpoint(
+	struct process_s *process,
+	struct breakpoint_s *breakpoint)
 {
-	// We're always 1 byte forward after the INT3 instruction executes.
-	address = process->registers.rip - 1;
-
-	struct breakpoint_s *breakpoint = breakpoint_search(
-		process->breakpoints,
-		address
-	);
-
-	if (breakpoint) {
-		ptrace(PTRACE_POKETEXT,
-				process->pid,
-				address,
-				breakpoint->previous_instruction);
-
-		process->registers.rip = address;
-		ptrace(PTRACE_SETREGS, process->pid, 0, &process->registers);
-
-		return true;
+	if (!breakpoint) {
+		return false;
 	}
 
-	return false;
+	// We're always 1 byte forward after the INT3 instruction executes.
+	long address = process->registers.rip - 1;
+
+	ptrace(PTRACE_POKETEXT,
+			process->pid,
+			address,
+			breakpoint->previous_instruction
+	);
+
+	process->registers.rip = address;
+	ptrace(PTRACE_SETREGS, process->pid, 0, &process->registers);
+
+	return true;
 }
 
 
@@ -114,12 +122,13 @@ bool i386_trace(struct process_s *process)
 		putchar('\t');
 	}
 
-	printf("%s+%s %s()%s @ %p\n",
+	printf("%s+%s %s()%s @ %p from %p\n",
 		KGRN,
 		KNRM,
 		symbol.name,
 		KNRM,
-		(void *)symbol.value
+		(void *)symbol.value,
+		(void *)return_address
 	);
 
 	// For tracing CALL and RET instructions
@@ -154,6 +163,6 @@ bool i386_trace(struct process_s *process)
 	long bp_instruction = (instruction & ~0xff) | I386_INT3; // 0xCC
 	ptrace(PTRACE_POKETEXT, process->pid, return_address, bp_instruction);
 	*/
-	
+
 	return true;
 }

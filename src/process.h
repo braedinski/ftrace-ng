@@ -10,6 +10,8 @@
 #ifndef _PROCESS_H_
 #define _PROCESS_H_
 
+#include "ftrace-ng.h"
+
 /*
  * address_space_s
  * To store fields parsed from /proc/<pid>/maps
@@ -41,11 +43,12 @@ struct elf_s
  * extensible.
 */
 struct process_s;
+struct breakpoint_s;
 struct arch_funcs_s
 {
 	bool (*trace)(struct process_s *);
-	bool (*set_breakpoint)(struct process_s *, long);
-	bool (*unset_breakpoint)(struct process_s *, long);
+	bool (*set_breakpoint)(struct process_s *, struct breakpoint_s *);
+	bool (*unset_breakpoint)(struct process_s *, struct breakpoint_s *);
 };
 
 

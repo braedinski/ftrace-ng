@@ -64,7 +64,15 @@ void process_set_symbol_breakpoints(struct process_s *process)
 	elf_symtab_iterator_init(&process->elf.object, &iterator);
 	while (elf_symtab_iterator_next(&iterator, &symbol) == ELF_ITER_OK) {
     	if (symbol.type == 2 && symbol.shndx == 13) {
-    		process->arch_funcs.set_breakpoint(process, symbol.value);
+    		struct breakpoint_s breakpoint = {
+				.address = symbol.value,
+				.previous_instruction = 0,
+				.type = BT_CALL
+			};
+			
+    		if (process->arch_funcs.set_breakpoint(process, &breakpoint)) {
+    			breakpoint_push_back(&process->breakpoints, &breakpoint);
+    		}
 		}
 	}
 }
@@ -217,7 +225,12 @@ bool process_trace(struct process_s *process)
 
 		rv = process->arch_funcs.trace(process);
 
-		process->arch_funcs.unset_breakpoint(process, process->registers.rip);
+		struct breakpoint_s *breakpoint = breakpoint_search(
+			process->breakpoints,
+			process->registers.rip - 1
+		);
+
+		process->arch_funcs.unset_breakpoint(process, breakpoint);
 	}
 
 	return rv;

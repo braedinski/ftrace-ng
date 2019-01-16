@@ -17,7 +17,7 @@
 #define I386_INT3	0xCC
 
 bool i386_trace(struct process_s *);
-bool i386_set_breakpoint(struct process_s *, long);
-bool i386_unset_breakpoint(struct process_s *, long);
+bool i386_set_breakpoint(struct process_s *, struct breakpoint_s *);
+bool i386_unset_breakpoint(struct process_s *, struct breakpoint_s *);
 
 #endif // _I386_H_

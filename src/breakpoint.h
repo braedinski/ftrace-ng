@@ -12,6 +12,12 @@
 
 #include "ftrace-ng.h"
 
+enum breakpoint_type
+{
+	BT_CALL,
+	BT_RETN
+};
+
 /*
  * A linked-list?! It's so inefficient, but it'll do for now.
  * *cries* ...
@@ -21,6 +27,8 @@ struct breakpoint_s
 	// char *symbol;
 	long address;
 	long previous_instruction;
+
+	enum breakpoint_type type;
 
 	struct breakpoint_s *next;
 };
