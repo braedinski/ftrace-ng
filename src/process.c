@@ -55,10 +55,10 @@ bool process_set_arch_funcs(
 */
 int process_set_breakpoints(struct process_s *process)
 {
-	int count = 0;
-
 	assert(process != NULL);
 	assert(process->arch_funcs.set_breakpoint != NULL);
+
+	int count = 0;
 
 	elf_symtab_iterator_t iterator;
 	struct elf_symbol symbol;
@@ -79,11 +79,10 @@ int process_set_breakpoints(struct process_s *process)
 		}
 	}
 
-	if (!count)
-	{
-		// If we got here, the binary must be stRIPped.
-		process->stripped = true;
+	// If we couldn't locate any symbols, then the binary has been stripped.
+	process->stripped = (count == 0);
 
+	if (!count) {
 		elf_eh_frame_iterator_t iter;
 		struct elf_eh_frame fde;
 
@@ -102,11 +101,6 @@ int process_set_breakpoints(struct process_s *process)
     			count++;
     		}
 		}
-	}
-	else
-	{
-		// We had some breakpoints set, so it's not stripped?!
-		process->stripped = false;
 	}
 
 	return count;
@@ -131,7 +125,7 @@ bool process_exec(char *path, char **argv)
 	if (elf_open_object(
 		process.path,
 		&process.elf.object,
-		ELF_LOAD_F_SMART|ELF_LOAD_F_FORENSICS,
+		ELF_LOAD_F_STRICT,
 		&process.elf.error) == false)
 	{
 		fprintf(stderr,

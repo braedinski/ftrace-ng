@@ -184,6 +184,7 @@ bool i386_trace(struct process_s *process)
 				process->registers.rip,
 				&symbol) == true)
 			{
+				// The binary is not stripped, print the symbol names.
 				printf("%s+%s %s(%d)%s\n",
 					KGRN,
 					KNRM,
@@ -196,15 +197,16 @@ bool i386_trace(struct process_s *process)
 			}
 			else
 			{
+				// The binary is stripped, print the addresses.
 				printf("%s+%s %p(%d)%s\n",
 					KGRN,
 					KNRM,
-					(void *)process->registers.rip,
+					(void *)process->registers.rip - 1,
 					argument,
 					KNRM
 				);
 
-				callret.call_address = process->registers.rip;
+				callret.call_address = process->registers.rip - 1;
 			}
 				
 			callret.retn_address = return_address;
@@ -230,7 +232,11 @@ bool i386_trace(struct process_s *process)
 						KNRM,
 						symbol.name,
 						KMAG,
+					#ifdef __x86_64__
 						process->registers.rax,
+					#elif __i386__
+						process->registers.eax,
+					#endif
 						KNRM
 					);
 				}
@@ -242,7 +248,11 @@ bool i386_trace(struct process_s *process)
 						KNRM,
 						(void *)callret->call_address,
 						KMAG,
+					#ifdef __x86_64__
 						process->registers.rax,
+					#elif __i386__
+						process->registers.eax,
+					#endif
 						KNRM
 					);
 				}
