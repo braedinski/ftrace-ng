@@ -9,8 +9,66 @@
 
 #include "ftrace-ng.h"
 
-bool process_run(struct process_s *process, struct arch_funcs_s *arch_funcs);
-bool process_get_address_space(struct process_s *process);
+bool process_trace(struct process_s *);
+bool process_get_address_space(struct process_s *);
+
+/*
+ * process_cleanup
+ * For deallocating resources used by 'struct process_s'.
+*/
+void process_cleanup(struct process_s *process)
+{
+
+}
+
+
+/*
+ * process_set_arch_funcs
+ * Sets up required function-pointers for handling different architectures.
+*/
+bool process_set_arch_funcs(
+	struct process_s *process)
+{
+	assert(process != NULL);
+
+	switch (process->elf.object.arch) {
+		case i386: {
+			process->arch_funcs.trace = &i386_trace;
+			process->arch_funcs.set_breakpoint = &i386_set_breakpoint;
+			process->arch_funcs.unset_breakpoint = &i386_unset_breakpoint;
+			return true;
+		}
+		case x64: {
+			process->arch_funcs.trace = &x64_trace;
+			return true;
+		}
+		default: {
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * process_set_symbol_breakpoints()
+*/
+void process_set_symbol_breakpoints(struct process_s *process)
+{
+	assert(process != NULL);
+	assert(process->arch_funcs.set_breakpoint != NULL);
+
+	elf_symtab_iterator_t iterator;
+	struct elf_symbol symbol;
+
+	elf_symtab_iterator_init(&process->elf.object, &iterator);
+	while (elf_symtab_iterator_next(&iterator, &symbol) == ELF_ITER_OK) {
+    	if (symbol.type == 2 && symbol.shndx == 13) {
+    		process->arch_funcs.set_breakpoint(process, symbol.value);
+		}
+	}
+}
+
 
 /*
  * process_exec()
@@ -18,9 +76,6 @@ bool process_get_address_space(struct process_s *process);
 */
 bool process_exec(char *path, char **argv)
 {
-	struct arch_funcs_s arch_funcs;
-	memset(&arch_funcs, 0, sizeof(struct arch_funcs_s));
-
 	struct process_s process;
 	memset(&process, 0, sizeof(struct process_s));
 	process.path = path;
@@ -29,14 +84,13 @@ bool process_exec(char *path, char **argv)
 	char *name = strrchr(path, '/');
 	process.name = (name ? name + 1 : path);
 	
-	// Load symbol information
+	// For parsing the ELF object at 'path' using libelfmaster.
 	if (elf_open_object(
 		process.path,
 		&process.elf.object,
 		ELF_LOAD_F_STRICT,
 		&process.elf.error) == false)
 	{
-		// If we can't parse the ELF object, we're screwed!
 		fprintf(stderr,
 			"The ELF header for '%s' could not be parsed.\n",
 			process.path
@@ -44,18 +98,11 @@ bool process_exec(char *path, char **argv)
 		return false;
 	}
 
-	switch (process.elf.object.arch) {
-		case i386: {
-			arch_funcs.run = &i386_run;
-			break;
-		}
-		case x64: {
-			arch_funcs.run = &x64_run;
-			break;
-		}
-		default: {
-			puts("Unsupported ABI");
-		}
+	// This function depends on the ELF object being parsed correctly.
+	if (!process_set_arch_funcs(&process))
+	{
+		fprintf(stderr, "The architecture is not supported.\n");
+		return false;
 	}
 
 	process.pid = fork();
@@ -63,7 +110,7 @@ bool process_exec(char *path, char **argv)
 		case -1: {
 			// ERROR: Unable to fork
 			perror("fork");
-			exit(1);
+			break;
 		}
 		case 0: {
 			// CHILD: Start the process to be traced.
@@ -79,11 +126,15 @@ bool process_exec(char *path, char **argv)
 				exit(1);
 			}
 		}
-
 		default: {
 			// PARENT: Begin tracing the child process.
 			int status;
 			wait(&status);
+
+			// We set breakpoints on all symbols
+			process_set_symbol_breakpoints(&process);
+
+			breakpoint_print(process.breakpoints);
 
 			// Get segment information
 			if (!process_get_address_space(&process)) {
@@ -91,11 +142,11 @@ bool process_exec(char *path, char **argv)
 					"Could not parse /proc/%d/maps, exiting...\n",
 					process.pid
 				);
-				exit(1);
+				break;
 			}
 
 			// Trace child until exit
-			while (process_run(&process, &arch_funcs));
+			while (process_trace(&process) == true);
 		}
 	}
 
@@ -104,6 +155,7 @@ bool process_exec(char *path, char **argv)
 	
 	return true;
 }
+
 
 /*
  * process_attach
@@ -117,37 +169,60 @@ bool process_attach(const pid_t pid)
 	process.attached = true;
 	process.pid = pid;
 
-	return true;
-}
-
-/*
- * process_run
- *
-*/
-bool process_run(struct process_s *process, struct arch_funcs_s *arch_funcs)
-{
-	// To be replaced with PTRACE_CONT eventually, and breakpoints.
-	ptrace(PTRACE_SINGLESTEP, process->pid, NULL, NULL);
-
-	int status;
-	wait(&status);
-	if (WIFEXITED(status))
-	{
+	if (ptrace(PTRACE_ATTACH, process.pid, NULL, NULL) == -1) {
+		perror("ptrace");
 		return false;
 	}
 
-	// The current state of all x86 registers.
-	ptrace(PTRACE_GETREGS, process->pid, NULL, &process->registers);
+	while (process_trace(&process) == true);
 
-	// We only care about the PC inside of our .text section.
-	if (process->registers.rip < process->as.start ||
-		process->registers.rip > process->as.end)
-	{
-		return true;
+	// Cleanup
+	process_cleanup(&process);
+
+	return true;
+}
+
+
+/*
+ * process_trace
+ * 
+*/
+bool process_trace(struct process_s *process)
+{
+	bool rv = false;
+
+	// To be replaced with PTRACE_CONT eventually, and breakpoints.
+	ptrace(PTRACE_CONT, process->pid, NULL, NULL);
+
+	int status;
+	wait(&status);
+
+	// The child process exited, so we exit.
+	if (WIFEXITED(status)) {
+		return false;
 	}
 
-	return arch_funcs->run(process);
+	// We hit a breakpoint, so let the arch-func handle it.
+	if (WIFSTOPPED(status)) {
+		process->arch_funcs.unset_breakpoint(process, process->registers.rip);
+
+		// The current state of all CPU registers.
+		ptrace(PTRACE_GETREGS, process->pid, NULL, &process->registers);
+
+		// (This is architecture dependent code)
+		// We only care about the PC inside of our .text section.
+		if (process->registers.rip < process->as.start ||
+			process->registers.rip > process->as.end)
+		{
+			return true;
+		}
+
+		rv = process->arch_funcs.trace(process);
+	}
+
+	return rv;
 }
+
 
 /*
  * get_process_address_space()

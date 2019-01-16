@@ -26,12 +26,26 @@ struct address_space_s
 
 /*
  * elf_s
- *
+ * For libelfmaster to store its bits and pieces.
 */
 struct elf_s
 {
-	elfobj_t object;
-	elf_error_t error;
+	elfobj_t		object;
+	elf_error_t		error;
+};
+
+
+/*
+ * arch_funcs_s
+ * A set of architecture-dependent functions (i386/x64), meant to be
+ * extensible.
+*/
+struct process_s;
+struct arch_funcs_s
+{
+	bool (*trace)(struct process_s *);
+	bool (*set_breakpoint)(struct process_s *, long);
+	bool (*unset_breakpoint)(struct process_s *, long);
 };
 
 
@@ -54,6 +68,11 @@ struct process_s
 	// The callstack for this process
 	struct stack_s          stack;
 
+	struct arch_funcs_s		arch_funcs;
+
+	// (at the moment) a linked-list of all breakpoints we've set.
+	struct breakpoint_s		*breakpoints;
+
 	// The absolute pathname to the executable
 	char                    *path;
 
@@ -62,15 +81,6 @@ struct process_s
 
 	// Whether or not we attached or execve()'d
 	bool                    attached;
-};
-
-
-/*
- * arch_funcs_s
-*/
-struct arch_funcs_s
-{
-	bool (*run)(struct process_s *);
 };
 
 

@@ -9,7 +9,7 @@
 
 #include "ftrace-ng.h"
 
-bool x64_run(struct process_s *process)
+bool x64_trace(struct process_s *process)
 {
 	printf("-> x64\n");
 

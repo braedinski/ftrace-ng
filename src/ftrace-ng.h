@@ -21,15 +21,13 @@
 #include <sys/ptrace.h>
 #include <libelfmaster.h>
 
+#include "breakpoint.h"
 #include "callstack.h"
 #include "process.h"
 #include "i386.h"
 #include "x64.h"
 
 #define PARSER_PERMISSIONS_LENGTH 4 // rwxp
-
-#define X86_32_CALL	0xE8
-#define X86_32_RET	0xC3
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0

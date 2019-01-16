@@ -12,6 +12,12 @@
 
 #include "ftrace-ng.h"
 
-bool i386_run(struct process_s *process);
+#define I386_CALL	0xE8
+#define I386_RETN	0xC3
+#define I386_INT3	0xCC
+
+bool i386_trace(struct process_s *);
+bool i386_set_breakpoint(struct process_s *, long);
+bool i386_unset_breakpoint(struct process_s *, long);
 
 #endif // _I386_H_

@@ -10,6 +10,56 @@
 #include "ftrace-ng.h"
 
 /*
+ * i386_set_breakpoint
+*/
+bool i386_set_breakpoint(struct process_s *process, long address)
+{
+	long instruction = ptrace(PTRACE_PEEKTEXT, process->pid, address, NULL);
+	long bp_instruction = (instruction & ~0xff) | I386_INT3; // 0xCC
+
+	struct breakpoint_s breakpoint = {
+		.address = address,
+		.previous_instruction = instruction
+	};
+
+	breakpoint_push_back(&process->breakpoints, &breakpoint);
+
+	ptrace(PTRACE_POKETEXT, process->pid, address, bp_instruction);
+
+	return true;
+}
+
+
+/*
+ * i386_unset_breakpoint
+*/
+bool i386_unset_breakpoint(struct process_s *process, long address)
+{
+	// We're always 1 byte forward after the INT3 instruction executes.
+	address = process->registers.rip - 1;
+
+	struct breakpoint_s *breakpoint = breakpoint_search(
+		process->breakpoints,
+		address
+	);
+
+	if (breakpoint) {
+		ptrace(PTRACE_POKETEXT,
+				process->pid,
+				address,
+				breakpoint->previous_instruction);
+
+		process->registers.rip = address;
+		ptrace(PTRACE_SETREGS, process->pid, 0, &process->registers);
+
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * i386_get_instructions
 */
 bool i386_get_instructions(
@@ -31,10 +81,11 @@ bool i386_get_instructions(
 	return true;
 }
 
+
 /*
- * i386_run
+ * i386_trace
 */
-bool i386_run(struct process_s *process)
+bool i386_trace(struct process_s *process)
 {
 	uint8_t opcode[8];
 	i386_get_instructions(process, opcode);
@@ -49,60 +100,22 @@ bool i386_run(struct process_s *process)
 		return true;
 	}
 
+	for (int i = 0; i < process->stack.depth; ++i) {
+		putchar('\t');
+	}
+
+	printf("%s+ %s()%s\n",
+		KGRN,
+		symbol.name,
+		KNRM
+	);
+
 	// For tracing CALL and RET instructions
 	switch (opcode[0]) {
-		case X86_32_CALL: {
-			// It's 'hard-coded' at the moment, need to fix get_opcode_at_ip()
-			unsigned long branch_address = 
-			(opcode[1] + (opcode[2] << 8) + (0xff << 16) + (0xff << 24));
-
-			struct callret_s call = {
-				.address = process->registers.rip + branch_address + 0x5,
-				.return_address = process->registers.rip + 0x5
-			};
-
-			// printf("%p -> %p\n", call.address, call.return_address);
-
-			if (elf_symbol_by_value(
-				&process->elf.object,
-				call.address,
-				&symbol) == false)
-			{
-				return true;
-			}
-
-			for (int i = 0; i < process->stack.depth; ++i) {
-				putchar('\t');
-			}
-
-			printf("%s+ %s()%s\n",
-				KGRN,
-				symbol.name,
-				KNRM
-			);
-
-			stack_push(&process->stack, &call);
-
+		case 0x89: {
 			break;
 		}
-		case X86_32_RET: {
-			struct callret_s *ret = stack_pop(&process->stack);
-			if (!ret) {
-				return true;
-			}
-
-			if (elf_symbol_by_value(
-				&process->elf.object,
-				ret->address,
-				&symbol) == false)
-			{
-				return true;
-			}
-
-			for (int i = 0; i < process->stack.depth; ++i) {
-				putchar('\t');
-			}
-
+		case I386_RETN: {
 			printf("%s- %s()%s -> (%s%lld%s)\n",
 				KYEL,
 				symbol.name,
