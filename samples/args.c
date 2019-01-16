@@ -7,10 +7,6 @@ int function_1(int a, int b, int c, int d, int e, int f, int g, int h, char *i, 
 
 int main()
 {
-	/* fld loads the floating-point value into the ST(0) register,
-	 * the lea instruction is to set the location for where we want
-	 * to store the floating-point value on the stack */
-
 	/*
 	 8048413:	d9 05 e4 84 04 08    	fld    DWORD PTR ds:0x80484e4	; We can grab the symbol for this.
 	 8048419:	8d 64 24 fc          	lea    esp,[esp-0x4]
@@ -28,8 +24,7 @@ int main()
 	 8048437:	e8 ca ff ff ff       	call   8048406 <function_1>
  	*/
 
- 	/* We need to figure out where the arguments begin */
-
 	function_1(0, 1, 2, 3, 4, 5, 6, 0xffff, "Hello, World!", 8, 1.5f);
+
 	return 0;
 }

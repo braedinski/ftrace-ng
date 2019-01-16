@@ -16,4 +16,4 @@ all: $(wildcard src/*.c)
 	cp bin/ftrace-ng ./ftrace-ng
 	
 clean:
-	rm -f ftrace-ng callstack
+	rm -f ftrace-ng

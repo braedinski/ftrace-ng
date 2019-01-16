@@ -204,8 +204,6 @@ bool process_trace(struct process_s *process)
 
 	// We hit a breakpoint, so let the arch-func handle it.
 	if (WIFSTOPPED(status)) {
-		process->arch_funcs.unset_breakpoint(process, process->registers.rip);
-
 		// The current state of all CPU registers.
 		ptrace(PTRACE_GETREGS, process->pid, NULL, &process->registers);
 
@@ -218,6 +216,8 @@ bool process_trace(struct process_s *process)
 		}
 
 		rv = process->arch_funcs.trace(process);
+
+		process->arch_funcs.unset_breakpoint(process, process->registers.rip);
 	}
 
 	return rv;

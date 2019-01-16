@@ -100,19 +100,31 @@ bool i386_trace(struct process_s *process)
 		return true;
 	}
 
+	// The return address is located on le stack
+	unsigned long return_address = ptrace(
+		PTRACE_PEEKTEXT,
+		process->pid,
+		process->registers.rsp,
+		NULL
+	);
+
+	return_address &= 0xffffffff;
+
 	for (int i = 0; i < process->stack.depth; ++i) {
 		putchar('\t');
 	}
 
-	printf("%s+ %s()%s\n",
+	printf("%s+%s %s()%s @ %p\n",
 		KGRN,
+		KNRM,
 		symbol.name,
-		KNRM
+		KNRM,
+		(void *)symbol.value
 	);
 
 	// For tracing CALL and RET instructions
 	switch (opcode[0]) {
-		case 0x89: {
+		case I386_CALL: {
 			break;
 		}
 		case I386_RETN: {
@@ -129,5 +141,19 @@ bool i386_trace(struct process_s *process)
 		}
 	}
 
+	struct callret_s callret = {
+		.address = process->registers.rip,
+		.return_address = return_address
+	};
+
+	stack_push(&process->stack, &callret);
+
+	// For setting a breakpoint on the return from the current function.
+	/*
+	long instruction = ptrace(PTRACE_PEEKTEXT, process->pid, return_address, NULL);
+	long bp_instruction = (instruction & ~0xff) | I386_INT3; // 0xCC
+	ptrace(PTRACE_POKETEXT, process->pid, return_address, bp_instruction);
+	*/
+	
 	return true;
 }

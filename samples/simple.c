@@ -18,5 +18,7 @@ int function_1(int x)
 int main()
 {
 	function_1(8);
+	function_1(4);
+	
 	return 0;
 }

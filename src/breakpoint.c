@@ -59,8 +59,8 @@ void breakpoint_push_back(
 */
 void breakpoint_print(struct breakpoint_s *current)
 {
-	while (current)
-	{
+	while (current) {
+		// print
 		current = current->next;
 	}
 }
@@ -76,7 +76,6 @@ struct breakpoint_s *breakpoint_search(
 	struct breakpoint_s *current = head;
 	while (current) {
 		if (current->address == address) {
-			// printf("[+] %p\n", address);
 			return current;
 		}
 
