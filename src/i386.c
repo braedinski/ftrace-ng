@@ -68,6 +68,73 @@ bool i386_unset_breakpoint(
 
 
 /*
+ * i386_get_function_arguments()
+ *
+*/
+int i386_get_function_arguments(struct process_s *process)
+{
+	uint32_t instruction;
+
+	// I'm just testing stuff don't yell at me...
+	for (int displ = 4; displ != (4 * 2); displ +=4 )
+	{
+		instruction = ptrace(
+				PTRACE_PEEKTEXT,
+				process->pid,
+				process->registers.rsp + displ,
+				NULL
+		);
+
+		// It could do without a fixed-length buffer!
+		char buffer[256];
+		memset(&buffer, 0, sizeof(buffer));
+
+		if (instruction >= process->as.start && instruction <= process->as.end) {
+			int idx = 0;
+			int str_displ = 0;
+
+			bool done = false;
+			while (!done) {
+				long data = ptrace(
+						PTRACE_PEEKTEXT,
+						process->pid,
+						instruction + str_displ,
+						NULL
+				);
+
+				long mask = 0xff;
+				for (int i = 0; i < 8; ++i) {
+					uint8_t ch = (data & mask) >> (i * 8);
+
+					if (ch == 0x00) {
+						done = true;
+						break;
+					}
+
+					// It'll do...
+					if (ch >= 0x20 && ch <= 0x7e) {
+						buffer[idx++] = ch;
+					} else {
+						done = true;
+					}
+
+					mask <<= 8;
+				}
+
+				str_displ += 8;
+			}
+
+			if (strlen(buffer)) {
+				printf("%p @ \"%s\"\n", instruction, buffer);
+			}
+		}
+	}
+
+	return instruction;
+}
+
+
+/*
  * i386_trace
 */
 bool i386_trace(struct process_s *process)
@@ -105,6 +172,9 @@ bool i386_trace(struct process_s *process)
 				breakpoint_push_back(&process->breakpoints, &breakpoint);
 			}
 
+			int argument = i386_get_function_arguments(process);
+
+			// Some tabs to help visualise the callstack
 			for (int i = 0; i < process->stack.depth; ++i) {
 				putchar('\t');
 			}
@@ -114,10 +184,11 @@ bool i386_trace(struct process_s *process)
 				process->registers.rip,
 				&symbol) == true)
 			{
-				printf("%s+%s %s()%s\n",
+				printf("%s+%s %s(%d)%s\n",
 					KGRN,
 					KNRM,
 					symbol.name,
+					argument,
 					KNRM
 				);
 
@@ -125,16 +196,16 @@ bool i386_trace(struct process_s *process)
 			}
 			else
 			{
-				printf("%s+%s %p()%s\n",
+				printf("%s+%s %p(%d)%s\n",
 					KGRN,
 					KNRM,
 					(void *)process->registers.rip,
+					argument,
 					KNRM
 				);
 
 				callret.call_address = process->registers.rip;
 			}
-
 				
 			callret.retn_address = return_address;
 			stack_push(&process->stack, &callret);
@@ -174,16 +245,6 @@ bool i386_trace(struct process_s *process)
 						process->registers.rax,
 						KNRM
 					);
-				}
-
-				// We try to set a breakpoint
-				struct breakpoint_s breakpoint = {
-					.address = callret->call_address,
-					.type = BT_CALL
-				};
-
-				if (i386_set_breakpoint(process, &breakpoint)) {
-					breakpoint_push_back(&process->breakpoints, &breakpoint);
 				}
 			}
 

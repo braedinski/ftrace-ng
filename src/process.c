@@ -101,8 +101,6 @@ int process_set_breakpoints(struct process_s *process)
     			breakpoint_push_back(&process->breakpoints, &breakpoint);
     			count++;
     		}
-
-			// printf("Function: %#llx - %#llx\n", fde.pc_begin, fde.pc_end);
 		}
 	}
 	else
@@ -178,9 +176,8 @@ bool process_exec(char *path, char **argv)
 
 			// We set breakpoints on all symbols
 			if (process_set_breakpoints(&process) <= 0) {
-				fprintf(
-					stderr,
-					"The binary might be stripped, no functions to trace\n"
+				fprintf(stderr,
+					"We couldn't find any functions to trace, exiting...\n"
 				);
 
 				break;
@@ -267,6 +264,12 @@ bool process_trace(struct process_s *process)
 		);
 
 		process->arch_funcs.unset_breakpoint(process, breakpoint);
+
+		// Thanks Adam!
+		ptrace(PTRACE_SINGLESTEP, process->pid, NULL, NULL);
+		wait(&status);
+
+		process->arch_funcs.set_breakpoint(process, breakpoint);
 	}
 
 	return rv;
