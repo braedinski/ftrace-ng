@@ -68,101 +68,128 @@ bool i386_unset_breakpoint(
 
 
 /*
- * i386_get_instructions
-*/
-bool i386_get_instructions(
-	struct process_s *process,
-	uint8_t *opcode)
-{
-	long inst = ptrace(
-		PTRACE_PEEKTEXT,
-		process->pid,
-		process->registers.rip,
-		NULL
-	);
-
-	opcode[0] = (inst & 0xff);
-	opcode[1] = (inst & 0xff00) >> 8;
-	opcode[2] = (inst & 0xff0000) >> 16;
-	opcode[3] = (inst & 0xff000000) >> 24;
-
-	return true;
-}
-
-
-/*
  * i386_trace
 */
 bool i386_trace(struct process_s *process)
 {
-	uint8_t opcode[8];
-	i386_get_instructions(process, opcode);
-
-	// If we can't locate the symbol, GTFO
 	struct elf_symbol symbol;
-	if (elf_symbol_by_value(
-		&process->elf.object,
-		process->registers.rip,
-		&symbol) == false)
-	{
+
+	struct breakpoint_s *bp = breakpoint_search(
+		process->breakpoints,
+		process->registers.rip - 1
+	);
+
+	if (!bp) {
 		return true;
 	}
 
-	// The return address is located on le stack
-	unsigned long return_address = ptrace(
-		PTRACE_PEEKTEXT,
-		process->pid,
-		process->registers.rsp,
-		NULL
-	);
+	switch (bp->type) {
+		case BT_CALL: {
+			struct callret_s callret;
 
-	return_address &= 0xffffffff;
-
-	for (int i = 0; i < process->stack.depth; ++i) {
-		putchar('\t');
-	}
-
-	printf("%s+%s %s()%s @ %p from %p\n",
-		KGRN,
-		KNRM,
-		symbol.name,
-		KNRM,
-		(void *)symbol.value,
-		(void *)return_address
-	);
-
-	// For tracing CALL and RET instructions
-	switch (opcode[0]) {
-		case I386_CALL: {
-			break;
-		}
-		case I386_RETN: {
-			printf("%s- %s()%s -> (%s%lld%s)\n",
-				KYEL,
-				symbol.name,
-				KNRM,
-				KMAG,
-				process->registers.rax,
-				KNRM
+			// We grab the return address from %esp/%rsp
+			uint32_t return_address = ptrace(
+				PTRACE_PEEKTEXT,
+				process->pid,
+				process->registers.rsp,
+				NULL
 			);
 
+			// A breakpoint is set on the return address with type BT_RETN.
+			struct breakpoint_s breakpoint = {
+				.address = return_address,
+				.type = BT_RETN
+			};
+
+			if (i386_set_breakpoint(process, &breakpoint)) {
+				breakpoint_push_back(&process->breakpoints, &breakpoint);
+			}
+
+			for (int i = 0; i < process->stack.depth; ++i) {
+				putchar('\t');
+			}
+			
+			if (elf_symbol_by_value(
+				&process->elf.object,
+				process->registers.rip,
+				&symbol) == true)
+			{
+				printf("%s+%s %s()%s\n",
+					KGRN,
+					KNRM,
+					symbol.name,
+					KNRM
+				);
+
+				callret.call_address = symbol.value;
+			}
+			else
+			{
+				printf("%s+%s %p()%s\n",
+					KGRN,
+					KNRM,
+					(void *)process->registers.rip,
+					KNRM
+				);
+
+				callret.call_address = process->registers.rip;
+			}
+
+				
+			callret.retn_address = return_address;
+			stack_push(&process->stack, &callret);
+
+			break;
+		}
+		case BT_RETN: {
+			struct callret_s *callret = stack_pop(&process->stack);
+			if (callret) {
+				for (int i = 0; i < process->stack.depth; ++i) {
+					putchar('\t');
+				}
+
+				if (elf_symbol_by_value(
+					&process->elf.object,
+					callret->call_address,
+					&symbol) == true)
+				{
+					// The binary is not stripped, print the symbol names.
+					printf("%s-%s %s() = %s%lld%s\n",
+						KYEL,
+						KNRM,
+						symbol.name,
+						KMAG,
+						process->registers.rax,
+						KNRM
+					);
+				}
+				else
+				{
+					// The binary is stripped, print the addresses.
+					printf("%s-%s %p() = %s%lld%s\n",
+						KYEL,
+						KNRM,
+						(void *)callret->call_address,
+						KMAG,
+						process->registers.rax,
+						KNRM
+					);
+				}
+
+				// We try to set a breakpoint
+				struct breakpoint_s breakpoint = {
+					.address = callret->call_address,
+					.type = BT_CALL
+				};
+
+				if (i386_set_breakpoint(process, &breakpoint)) {
+					breakpoint_push_back(&process->breakpoints, &breakpoint);
+				}
+			}
+
 			break;
 		}
 	}
-
-	struct callret_s callret = {
-		.address = process->registers.rip,
-		.return_address = return_address
-	};
-
-	stack_push(&process->stack, &callret);
-
-	// For setting a breakpoint on the return from the current function.
-	/*
-	long instruction = ptrace(PTRACE_PEEKTEXT, process->pid, return_address, NULL);
-	long bp_instruction = (instruction & ~0xff) | I386_INT3; // 0xCC
-	ptrace(PTRACE_POKETEXT, process->pid, return_address, bp_instruction);
-	*/
 
 	return true;
 }

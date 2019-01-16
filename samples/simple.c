@@ -19,6 +19,8 @@ int main()
 {
 	function_1(8);
 	function_1(4);
+	function_2(16);
+	function_1(48);
 	
 	return 0;
 }

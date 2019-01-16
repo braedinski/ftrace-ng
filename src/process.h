@@ -84,6 +84,9 @@ struct process_s
 
 	// Whether or not we attached or execve()'d
 	bool                    attached;
+
+	// Was the binary stripped?
+	bool					stripped;
 };
 
 

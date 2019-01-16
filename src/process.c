@@ -51,10 +51,12 @@ bool process_set_arch_funcs(
 
 
 /*
- * process_set_symbol_breakpoints()
+ * process_set_breakpoints()
 */
-void process_set_symbol_breakpoints(struct process_s *process)
+int process_set_breakpoints(struct process_s *process)
 {
+	int count = 0;
+
 	assert(process != NULL);
 	assert(process->arch_funcs.set_breakpoint != NULL);
 
@@ -63,7 +65,7 @@ void process_set_symbol_breakpoints(struct process_s *process)
 
 	elf_symtab_iterator_init(&process->elf.object, &iterator);
 	while (elf_symtab_iterator_next(&iterator, &symbol) == ELF_ITER_OK) {
-    	if (symbol.type == 2 && symbol.shndx == 13) {
+    	if (symbol.type == 2 /* I dunno why there isn't a macro */) {
     		struct breakpoint_s breakpoint = {
 				.address = symbol.value,
 				.previous_instruction = 0,
@@ -72,9 +74,44 @@ void process_set_symbol_breakpoints(struct process_s *process)
 			
     		if (process->arch_funcs.set_breakpoint(process, &breakpoint)) {
     			breakpoint_push_back(&process->breakpoints, &breakpoint);
+    			count++;
     		}
 		}
 	}
+
+	if (!count)
+	{
+		// If we got here, the binary must be stRIPped.
+		process->stripped = true;
+
+		elf_eh_frame_iterator_t iter;
+		struct elf_eh_frame fde;
+
+		printf("We couldn't locate any symbols, trying to rebuild using GNU_EH_FRAME\n");
+
+	    elf_eh_frame_iterator_init(&process->elf.object, &iter);
+	    while (elf_eh_frame_iterator_next(&iter, &fde) == ELF_ITER_OK) {
+	    	struct breakpoint_s breakpoint = {
+				.address = fde.pc_begin,
+				.previous_instruction = 0,
+				.type = BT_CALL
+			};
+			
+    		if (process->arch_funcs.set_breakpoint(process, &breakpoint)) {
+    			breakpoint_push_back(&process->breakpoints, &breakpoint);
+    			count++;
+    		}
+
+			// printf("Function: %#llx - %#llx\n", fde.pc_begin, fde.pc_end);
+		}
+	}
+	else
+	{
+		// We had some breakpoints set, so it's not stripped?!
+		process->stripped = false;
+	}
+
+	return count;
 }
 
 
@@ -96,7 +133,7 @@ bool process_exec(char *path, char **argv)
 	if (elf_open_object(
 		process.path,
 		&process.elf.object,
-		ELF_LOAD_F_STRICT,
+		ELF_LOAD_F_SMART|ELF_LOAD_F_FORENSICS,
 		&process.elf.error) == false)
 	{
 		fprintf(stderr,
@@ -140,7 +177,14 @@ bool process_exec(char *path, char **argv)
 			wait(&status);
 
 			// We set breakpoints on all symbols
-			process_set_symbol_breakpoints(&process);
+			if (process_set_breakpoints(&process) <= 0) {
+				fprintf(
+					stderr,
+					"The binary might be stripped, no functions to trace\n"
+				);
+
+				break;
+			}
 
 			breakpoint_print(process.breakpoints);
 
@@ -214,14 +258,6 @@ bool process_trace(struct process_s *process)
 	if (WIFSTOPPED(status)) {
 		// The current state of all CPU registers.
 		ptrace(PTRACE_GETREGS, process->pid, NULL, &process->registers);
-
-		// (This is architecture dependent code)
-		// We only care about the PC inside of our .text section.
-		if (process->registers.rip < process->as.start ||
-			process->registers.rip > process->as.end)
-		{
-			return true;
-		}
 
 		rv = process->arch_funcs.trace(process);
 

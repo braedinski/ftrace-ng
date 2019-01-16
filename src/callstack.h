@@ -20,8 +20,8 @@
 */
 struct callret_s
 {
-	unsigned long address;
-	unsigned long return_address;
+	unsigned long call_address;
+	unsigned long retn_address;
 
 	struct callret_s *next;
 };
